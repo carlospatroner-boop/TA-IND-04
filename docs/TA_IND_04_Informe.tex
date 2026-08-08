@@ -1,0 +1,567 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---------- Codificación e idioma ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+
+% ---------- Geometría y tipografía ----------
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{setspace}
+\onehalfspacing
+
+% ---------- Matemáticas, tablas, unidades ----------
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\sisetup{output-decimal-marker={,}, group-separator={.}}
+
+% ---------- Figuras y diagramas ----------
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds}
+
+% ---------- Referencias cruzadas y bibliografía ----------
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, citecolor=blue!50!black, urlcolor=blue!50!black}
+\usepackage[backend=biber,style=ieee,sorting=none]{biblatex}
+\addbibresource{references.bib}
+
+\title{\textbf{TA-IND-04 --- Informe Técnico Individual}\\[0.3em]
+\large Análisis de Rendimiento Paralelo (Unidad 4) aplicado al Proyecto Fin de Curso}
+\author{}
+\date{}
+
+\begin{document}
+
+% ======================================================================
+% PORTADA
+% ======================================================================
+\begin{titlepage}
+\centering
+\vspace*{1cm}
+{\large Universidad Técnica Estatal de Quevedo\par}
+{\large Facultad de Ciencias de la Computación\par}
+{\large Carrera de Ingeniería de Software\par}
+\vspace{1.2cm}
+
+{\Large\bfseries TA-IND-04 --- Informe Técnico Individual\par}
+\vspace{0.4cm}
+{\large Análisis de Rendimiento Paralelo (Unidad 4)\\ aplicado al Proyecto Fin de Curso\par}
+\vspace{1.2cm}
+
+\begin{tabular}{ll}
+\textbf{Asignatura:} & Aplicaciones Distribuidas (ISR-701) \\
+\textbf{Unidad:} & Unidad 4 --- Cómputo Paralelo y Distribuido \\
+\textbf{Docente responsable:} & Gleiston C. Guerrero-Ulloa, M.Sc. \\
+\textbf{Período académico:} & 2026--2027 PPA \\
+\end{tabular}
+
+\vspace{1.2cm}
+\begin{tabular}{ll}
+\textbf{Estudiante:} & Carpio Mendoza Carlos Jose \\
+\textbf{Correo:} & carlospatroner@gmail.com \\
+\textbf{Equipo PE-U4 / GA-SUM-05:} & ACC --- Soporte Técnico ISP \\
+ & (Alvarez Parraga Jeremy Alexis, Aucatoma Celorio Jhinson Stalyn, \\
+ & Carpio Mendoza Carlos Jose) \\
+\textbf{PFC de referencia:} & ACC --- Soporte Técnico ISP \\
+ & (sistema de gestión de tickets de soporte técnico, arquitectura \\
+ & de microservicios) \\
+\textbf{Transformación declarada como foco:} & T4 --- Columna derivada compleja \\
+ & (clasificación de prioridad de atención) \\
+\textbf{URL del repositorio individual:} & \url{https://github.com/carlospatroner-boop/TA-IND-04} \\
+\end{tabular}
+
+\vspace{1.5cm}
+{\large Fecha: 08 de agosto de 2026\par}
+
+\vfill
+{\small Documento elaborado en \LaTeX{} (pdflatex + biber).\par}
+\end{titlepage}
+
+% ======================================================================
+\section{Introducción y contexto}
+% ======================================================================
+
+Este informe desarrolla, de forma individual, el análisis crítico de los resultados de
+\emph{speedup} obtenidos por el equipo ACC en la práctica GA-SUM-05/PE-U4 ---comprobación
+experimental de la Ley de Amdahl~\cite{amdahl1967validity} con Apache
+Spark~\cite{zaharia2016apache}--- y su proyección hacia el Proyecto Fin de Curso (PFC) del
+mismo equipo: un sistema de gestión de tickets de soporte técnico para un proveedor de
+servicios de internet (ISP), implementado como arquitectura de microservicios (\texttt{auth-service},
+\texttt{ticket-service}, \texttt{notification-service}, \texttt{ai-service}, \texttt{report-service},
+sobre un clúster CockroachDB de tres nodos particionado por \texttt{fecha\_apertura} y un
+bus de eventos Kafka).
+
+El experimento base del equipo comparó cinco transformaciones (\(T_1\)--\(T_5\)) implementadas
+de forma equivalente en pandas (secuencial) y PySpark (distribuido) sobre 600\,000 registros
+reales de quejas de consumidores de telecomunicaciones de la \emph{Federal Communications
+Commission} (FCC, EE.\,UU.)~\cite{fcc2026complaints}, usados como sustituto público del
+histórico interno de tickets del ISP por no existir un dataset abierto equivalente para
+Ecuador. Los datos base de este informe proceden íntegramente del repositorio del equipo:
+
+\begin{quote}
+\textbf{Repositorio de origen:} \url{https://github.com/carlospatroner-boop/pe-u4-spark-Soporte-Tecnico-ISP}\\
+\textbf{Commit exacto:} \texttt{1d643b0c1f71a1cfd951c3e8e7169744010d1420}
+\end{quote}
+
+En ese commit se verificó, por \texttt{git ls-remote} y por inspección directa del árbol de
+archivos, la presencia de \texttt{resultados/tiempos\_resumen.csv},
+\texttt{resultados/tiempos\_crudos.csv} y del resto de artefactos citados en este documento.
+Plataforma declarada por el equipo para la corrida base: contenedor Docker Linux
+(\texttt{eclipse-temurin:21-jdk-jammy}), Python 3.10, PySpark 4.1.2, \texttt{spark.executor.instances=4}
+(configuración ``por defecto'' del Paso 3 de la guía GA-SUM-05).
+
+Como transformación declarada de foco individual se eligió \textbf{T4 (columna derivada
+compleja)}: la clasificación de prioridad de atención (\texttt{ALTA}/\texttt{MEDIA}/\texttt{BAJA})
+a partir del tipo y motivo de incidencia, implementada como una UDF de Python
+(\texttt{referencia.clasificar\_prioridad}) aplicada con \texttt{F.udf} sobre cada fila. Los
+demás integrantes declararon T1 (Alvarez Parraga Jeremy Alexis) y T3 (Aucatoma Celorio Jhinson
+Stalyn); no hay coincidencia de foco dentro del equipo.
+
+El objetivo de este documento no es repetir las conclusiones del informe grupal, sino: (i)
+cuantificar cuánto se desvía el comportamiento observado de T4 respecto de la predicción
+teórica de Amdahl, incluyendo un escalado de \(N=1,2,4\) executors que el equipo no midió para
+esta transformación y que se ejecutó de forma individual para este informe (Sección~\ref{sec:analisis});
+(ii) diagnosticar la fracción no escalable con la métrica de Karp-Flatt~\cite{karpflatt1990measuring}
+(Sección~\ref{sec:karpflatt}); y (iii) decidir, con criterio propio, un punto concreto de
+integración del procesamiento distribuido en el PFC (Secciones~\ref{sec:integracion}
+a~\ref{sec:postura}).
+
+% ======================================================================
+\section{Análisis propio de los resultados de speedup}
+\label{sec:analisis}
+% ======================================================================
+
+\subsection{Tabla de tiempos y speedup de las cinco transformaciones}
+
+La Tabla~\ref{tab:tiempos-base} reproduce, sin alterar ninguna cifra, los tiempos medianos (5
+repeticiones, 1 calentamiento descartado, protocolo \texttt{medicion.py} del equipo) tal como
+constan en \texttt{resultados/tiempos\_resumen.csv} del commit declarado. El speedup se calcula
+como \(S = T_{\text{pandas}} / T_{\text{pyspark}}\) y la eficiencia como \(E(N{=}4) = S/4\).
+
+\begin{table}[htbp]
+\centering
+\caption{Tiempos medianos y speedup por transformación, commit \texttt{1d643b0c1f71\ldots}
+(equipo ACC, \(n=\num{600000}\) registros, PySpark local[4]).}
+\label{tab:tiempos-base}
+\begin{tabular}{lS[table-format=1.4]S[table-format=1.4]S[table-format=1.4]S[table-format=1.4]}
+\toprule
+{Transformación} & {\(T_{\text{pandas}}\) (s)} & {\(T_{\text{pyspark}}\) (s)} & {\(S\)} & {\(E(N{=}4)\)} \\
+\midrule
+T1 --- Filtrado             & 0.1846 & 1.0789 & 0.1711 & 0.0428 \\
+T2 --- Agrupación           & 0.1575 & 1.8854 & 0.0835 & 0.0209 \\
+T3 --- Join                 & 0.1363 & 1.8290 & 0.0745 & 0.0186 \\
+\textbf{T4 --- Col. derivada (foco)} & \textbf{0.3559} & \textbf{0.8483} & \textbf{0.4195} & \textbf{0.1049} \\
+T5 --- Top-N                & 0.1169 & 1.4286 & 0.0818 & 0.0205 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+T4 es, con diferencia, la transformación de mejor comportamiento relativo (\(S=0.4195\) frente
+a \(0.07\)--\(0.17\) del resto), pero PySpark sigue siendo \emph{más lento} que pandas a este
+volumen de datos. Esto no es un error de medición: es el resultado esperado y se explica en la
+Sección~\ref{sec:pregunta-s}.
+
+\subsection{Escalado propio de T4 y ajuste de la Ley de Amdahl}
+
+El repositorio del equipo mide el escalado en \(N=1,2,4\) executors únicamente para T3
+(\texttt{resultados/t3\_escalado\_executors.json}); no existe esa medición para T4. Como T4 es
+mi foco declarado, y la guía exige la curva de Amdahl completa para la transformación
+declarada, ejecuté yo mismo esa medición replicando exactamente el protocolo del equipo
+(\texttt{medicion.py}: 1 calentamiento + 5 repeticiones, mediana, materialización con
+\texttt{count()}) y el código de T4 (\texttt{transformaciones\_spark.py}) sin modificarlo, sobre
+el mismo dataset de 600\,000 filas. La diferencia declarada de plataforma es que esta corrida
+se ejecutó en PySpark 4.1.2 / Java 21 en modo local, en mi propia máquina (Windows, 8 núcleos
+lógicos), sin el contenedor Docker que usó el equipo para la corrida base; el detalle completo
+consta en \texttt{datos/plataforma\_medicion\_individual.json} del repositorio de este informe.
+Por esta diferencia de entorno, los tiempos absolutos de esta subsección \textbf{no son
+comparables directamente} con los de la Tabla~\ref{tab:tiempos-base}; sí lo son entre sí, por
+haberse medido en la misma máquina y la misma sesión de trabajo, que es lo que exige el
+análisis de escalado (Ecs.~\ref{eq:amdahl}--\ref{eq:eficiencia}, definidas relativas a
+\(N=1\) como línea base).
+
+\begin{table}[htbp]
+\centering
+\caption{Escalado propio de T4 (columna derivada) en \(N=1,2,4\) executors locales, \(n=\num{600000}\) registros.}
+\label{tab:escalado-t4}
+\begin{tabular}{cS[table-format=1.4]S[table-format=1.4]S[table-format=1.4]}
+\toprule
+{\(N\)} & {\(T(N)\) (s)} & {\(S(N)\)} & {\(E(N)\)} \\
+\midrule
+1 & 0.7435 & 1.0000 & 1.0000 \\
+2 & 0.4495 & 1.6540 & 0.8270 \\
+4 & 0.4781 & 1.5549 & 0.3887 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Con la Ec.~\eqref{eq:amdahl} y el valor de \(S(4)=1{,}5549\) despejado por la forma de
+Karp-Flatt (Ec.~\eqref{eq:karpflatt}, ver Sección~\ref{sec:karpflatt}) se obtiene una fracción
+serial \(p \approx 0{,}5242\). Un ajuste independiente por mínimos cuadrados no lineales sobre
+los tres puntos \((N, S(N))\) da \(p_{\text{LS}} \approx 0{,}5400\) --- consistente con el valor
+algebraico, lo que sostiene la robustez de la estimación. Con \(p=0{,}5242\), el speedup máximo
+teórico es \(S_{\max} = 1/(1-p) \approx 2{,}10\) (Ec.~\ref{eq:amdahl}), y se necesitarían
+\(N\approx 9{,}9\) executors para alcanzar el 90\,\% de ese máximo.
+
+\subsubsection{¿Coinciden los resultados con la predicción de Amdahl?}
+\label{sec:pregunta-p1}
+
+La respuesta es \textbf{parcialmente, y de forma asimétrica según el tramo de \(N\)}. Usando la
+curva ajustada por mínimos cuadrados (\(p_{\text{LS}}=0{,}5400\)) como predicción independiente
+del punto usado para calibrar el \(p\) principal:
+
+\[
+S_{\text{teo}}(2) = \frac{1}{(1-0{,}54)+0{,}54/2} \approx 1{,}3699 \qquad
+S_{\text{teo}}(4) = \frac{1}{(1-0{,}54)+0{,}54/4} \approx 1{,}6807
+\]
+
+La desviación relativa \(\Delta = (S_{\text{med}}-S_{\text{teo}})/S_{\text{teo}}\) es:
+
+\[
+\Delta(2) = \frac{1{,}6540-1{,}3699}{1{,}3699} \approx +20{,}7\,\% \qquad
+\Delta(4) = \frac{1{,}5549-1{,}6807}{1{,}6807} \approx -7{,}5\,\%
+\]
+
+En \(N=2\) el speedup observado \emph{supera} la curva teórica; en \(N=4\) queda \emph{por
+debajo}. Un modelo de Amdahl de \(p\) constante no puede reproducir bien ambos puntos a la vez
+porque supone que la fracción serial no cambia con \(N\); mis datos muestran precisamente lo
+contrario (Sección~\ref{sec:karpflatt}): la sobrecarga efectiva \emph{crece} con \(N\), de modo
+que el modelo de \(p\) único subestima el costo real en \(N=4\) y sobrestima el beneficio de
+duplicar executors más allá de 2 en esta máquina. Esta no linealidad, no la simple ``desviación
+por sobrecarga de Spark'' genérica, es la lectura correcta del dato.
+
+\subsubsection{El caso \texorpdfstring{$S<1$}{S<1} de la tabla principal}
+\label{sec:pregunta-s}
+
+La Tabla~\ref{tab:tiempos-base} muestra \(S=0{,}4195\) para T4: PySpark en \(N=4\) sigue siendo
+más lento que pandas de un solo hilo. La Ley de Amdahl \textbf{no puede predecir} este caso
+porque su hipótesis fundacional es sobrecarga nula: describe cómo escala \emph{el mismo
+programa} al añadir unidades de procesamiento, no la comparación entre dos motores de ejecución
+distintos (pandas de un proceso vs.\ PySpark con JVM, planificación de tareas y, en T4,
+serialización Python--JVM por fila)~\cite{hillmarty2008amdahl}. El motor distribuido solo
+recupera esa desventaja de arranque una vez que el volumen de datos \(n\) supera el punto donde
+el costo fijo \(\beta\) se amortiza --- exactamente el umbral \(n^{*}\) que se calcula en la
+Sección~\ref{sec:umbral}.
+
+% ======================================================================
+\section{Diagnóstico de la fracción no escalable}
+\label{sec:karpflatt}
+% ======================================================================
+
+La métrica de Karp-Flatt (Ec.~\ref{eq:karpflatt}) despeja la fracción serial \emph{observada}
+\(e\) a partir del speedup medido, sin asumir que el paralelismo es ideal. Aplicada a los datos
+propios de escalado de T4:
+
+\[
+e(2) = \frac{\tfrac{1}{1{,}6540}-\tfrac{1}{2}}{1-\tfrac{1}{2}} \approx 0{,}2092
+\qquad
+e(4) = \frac{\tfrac{1}{1{,}5549}-\tfrac{1}{4}}{1-\tfrac{1}{4}} \approx 0{,}5242
+\]
+
+\textbf{Tendencia: \(e\) más que se duplica al pasar de \(N=2\) a \(N=4\)} (0,2092
+\(\to\) 0,5242). Según la lectura exigida por la guía, un \(e\) creciente indica que la
+pérdida de eficiencia \textbf{no} es un límite algorítmico fijo del problema, sino sobrecarga
+del motor que aumenta con \(N\). En este caso identifico tres mecanismos concretos, con la
+evidencia disponible:
+
+\begin{enumerate}
+\item \textbf{Serialización Python--JVM por fila de la UDF.} T4 usa
+\texttt{F.udf(referencia.clasificar\_prioridad)}: Catalyst no puede optimizar el cuerpo de una
+UDF de Python (es una caja opaca para el planificador de consultas), por lo que cada fila cruza
+la frontera JVM~\(\leftrightarrow\)~intérprete Python vía \texttt{pickle}. Es un costo
+prácticamente fijo por fila, independiente de \(N\); explica por qué T4 es la transformación
+\emph{con mejor} comportamiento relativo del grupo (0,4195 frente a 0,07--0,17): al no requerir
+\emph{shuffle} (a diferencia de T2/T3/T5, que sí agrupan, unen u ordenan), el único sobrecosto
+distribuido de T4 es este, y es comparativamente menor que el de una etapa de \emph{shuffle}
+completa~\cite{duenner2017understanding}.
+\item \textbf{Contención de núcleos en una sola máquina compartida.} Esta corrida no usa un
+clúster real: los \(N\) hilos de \texttt{local[N]} comparten los mismos 8 núcleos lógicos con
+el sistema operativo, el proceso \emph{driver} y los procesos de trabajo de Python que PySpark
+lanza para ejecutar la UDF (\texttt{datos/plataforma\_medicion\_individual.json}). De \(N=1\) a
+\(N=2\) todavía hay holgura de núcleos disponibles y el speedup mejora con normalidad; de
+\(N=2\) a \(N=4\) la máquina empieza a competir consigo misma (más hilos JVM y más procesos
+Python simultáneos sobre el mismo hardware), lo que explica que el tiempo en \(N=4\)
+(\(\SI{0.4781}{\second}\)) sea mayor que en \(N=2\) (\(\SI{0.4495}{\second}\)) en vez de menor.
+Un clúster con executors en nodos físicamente separados no tendría este efecto en la misma
+medida.
+\item \textbf{Partición de entrada ligada al número de executors.} Con
+\texttt{spark.default.parallelism} sin fijar (confirmado en la configuración efectiva de cada
+sesión, \texttt{datos/} de este repositorio), Spark deriva el número mínimo de particiones de
+lectura del CSV del propio \(N\); a más executors, más particiones más pequeñas para el mismo
+volumen de datos, y por tanto más tareas con su propio costo fijo de planificación y arranque de
+proceso Python por partición, sin que el trabajo total por partición se reduzca proporcionalmente.
+\end{enumerate}
+
+A diferencia del equipo, que documentó esta atribución para T3 con capturas de la Spark UI, no
+capturé evidencia visual de la UI para T4 en esta corrida individual; la atribución anterior se
+sostiene en el código fuente citado (\texttt{transformaciones\_spark.py}, \texttt{referencia.py}),
+en la configuración efectiva de cada sesión y en literatura arbitrada, no en trazas de Spark UI
+propias. Lo señalo explícitamente como limitación de esta sección, no como un hallazgo silenciado.
+
+% ======================================================================
+\section{Propuesta de integración al PFC}
+\label{sec:integracion}
+% ======================================================================
+
+\subsection{Caso de uso concreto}
+
+El PFC del equipo (Soporte Técnico ISP) ya declara, en el README del repositorio de origen, que
+la decisión de negocio que sustenta el uso de procesamiento distribuido es la
+\textbf{priorización automática de la cola de atención técnica}, construida sobre la columna
+\texttt{prioridad} (T4) y la agregación por zona (T2). Este informe concreta esa idea en un
+único proceso, con periodicidad, volumen y salida definidos:
+
+\begin{itemize}
+\item \textbf{Proceso distribuido:} recálculo periódico de \texttt{prioridad} (equivalente a T4)
+sobre \emph{todos} los tickets abiertos o reabiertos en las últimas 24 horas, seguido de una
+agregación por \texttt{region} (equivalente a T2) para producir un tablero de carga por zona.
+\item \textbf{Periodicidad:} por lotes (\emph{batch}), no en flujo continuo. El propio umbral de
+rentabilidad calculado en la Sección~\ref{sec:umbral} muestra que, al volumen actual del
+sistema, un flujo en tiempo real no se justifica frente a una recomputación programada.
+\item \textbf{Volumen:} el histórico de tickets crece de forma incremental (altas diarias del
+ISP), no como una carga de 600\,000 filas de una sola vez; el trabajo por lotes se dimensiona
+sobre el acumulado histórico completo, no solo sobre el incremento del día.
+\item \textbf{Salida:} una tabla derivada \texttt{prioridad\_agregada} (prioridad recalculada por
+ticket + conteo y tiempo de espera medio por zona).
+\item \textbf{Decisión que se apoya en la salida:} el equipo de operaciones usa ese tablero para
+decidir en qué zonas reforzar personal técnico y qué tickets escalar primero, en lugar de
+atenderlos por orden estricto de llegada.
+\end{itemize}
+
+\subsection{Punto de inserción en la arquitectura}
+
+La Figura~\ref{fig:arquitectura} muestra el punto exacto de inserción. El sistema actual (Entrega
+3) ya tiene cinco microservicios, un clúster CockroachDB de tres nodos particionado por
+\texttt{fecha\_apertura}, Kafka como bus de eventos y \texttt{report-service} como modelo de
+lectura CQRS que ya consume los cuatro tópicos de dominio. El nuevo componente
+\textbf{\texttt{priority-batch-job}} se inserta \emph{junto a} --- no dentro de ---
+\texttt{report-service}: lee el histórico de tickets desde \texttt{report\_db} (CockroachDB) por
+JDBC, ejecuta en Spark la transformación equivalente a T4+T2, y escribe el resultado en una
+tabla materializada del mismo \texttt{report\_db} que \texttt{report-service} ya sabe leer. No
+reemplaza a \texttt{ai-service} (que clasifica cada ticket individualmente en tiempo real al
+crearse, vía Kafka): lo complementa con una vista agregada y recalculada a escala que
+\texttt{ai-service} no está diseñado para producir en flujo.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=0.9cm and 1.3cm,
+  box/.style={draw, rounded corners, minimum height=0.9cm, minimum width=2.6cm, align=center, font=\small},
+  existing/.style={box, fill=blue!8},
+  new/.style={box, fill=orange!15, draw=orange!70!black, thick},
+  db/.style={box, fill=green!10, double, double distance=1.2pt, minimum width=2.2cm},
+  arr/.style={-Stealth, thick}
+]
+  \node[existing] (frontend) {Frontend};
+  \node[existing, right=of frontend] (ticket) {ticket-service};
+  \node[existing, right=of ticket] (kafka) {Kafka\\(4 tópicos)};
+  \node[existing, right=of kafka] (ai) {ai-service\\(clasif. en línea)};
+
+  \node[db, below=1.1cm of ticket] (crdb) {CockroachDB\\report\_db};
+  \node[new, below=1.1cm of kafka] (batch) {priority-batch-job\\(Spark, T4+T2, programado)};
+  \node[existing, below=1.1cm of ai] (report) {report-service\\(CQRS, lectura)};
+
+  \draw[arr] (frontend) -- (ticket);
+  \draw[arr] (ticket) -- (kafka);
+  \draw[arr] (kafka) -- (ai);
+  \draw[arr] (ticket.south) -- (crdb.north);
+  \draw[arr] (crdb) -- node[below,font=\scriptsize]{JDBC (lote)} (batch);
+  \draw[arr] (batch) -- node[below,font=\scriptsize]{escribe} (report);
+  \draw[arr] (crdb.east) -- (report.west);
+  \draw[arr, dashed] (report) -- node[right,font=\scriptsize]{tablero} (ai.south);
+
+\end{tikzpicture}
+\caption{Punto de inserción del procesamiento distribuido en la arquitectura del PFC:
+\texttt{priority-batch-job} (elaboración propia) lee de \texttt{report\_db} y escribe el
+resultado agregado para que \texttt{report-service} lo sirva, sin reemplazar la clasificación
+en línea de \texttt{ai-service}.}
+\label{fig:arquitectura}
+\end{figure}
+
+% ======================================================================
+\section{Dimensionamiento y viabilidad en la nube}
+\label{sec:umbral}
+% ======================================================================
+
+La Ec.~\eqref{eq:umbral} modela el tiempo secuencial como \(T_{\text{sec}}(n)=\alpha n\) y el
+distribuido como \(T_{\text{dist}}(n,N)=\beta+\gamma n/N\). Se estimaron los tres parámetros
+así, declarando el método de ajuste:
+
+\begin{itemize}
+\item \(\alpha\) (tasa secuencial, s/registro) se obtiene directamente de la mediana pandas de
+T4 en el commit del equipo: \(\alpha = 0{,}35589/600\,000 \approx \SI{5.9315e-7}{\second}\) por
+registro.
+\item \(\beta\) y \(\gamma\) se obtienen por \textbf{regresión lineal por mínimos cuadrados}
+\(T = \beta + \gamma\,x\), con \(x=n/N\), sobre los tres puntos propios de escalado de la
+Tabla~\ref{tab:escalado-t4} (\(n=600\,000\) fijo, \(N=1,2,4\)): \(\beta \approx \SI{0.3311}{\second}\),
+\(\gamma \approx \SI{6.4537e-7}{\second}\).
+\end{itemize}
+
+\textbf{Limitación declarada:} \(\alpha\) proviene del entorno Docker del equipo y \(\beta,\gamma\)
+de mi propia máquina; se combinan porque la Ec.~\eqref{eq:umbral} solo necesita su orden de
+magnitud relativo (costo fijo de sesión distribuida frente a costo marginal por fila), no una
+comparación de hardware idéntico, pero el valor exacto de \(n^{*}\) debe leerse como una
+estimación, no una cifra de producción.
+
+Con \(N=4\) (configuración estándar del equipo): \(\gamma/N \approx \SI{1.6134e-7}{\second}\),
+que es menor que \(\alpha\), de modo que la condición de validez \(\alpha > \gamma/N\) se
+cumple, y:
+
+\[
+n^{*} = \frac{\beta}{\alpha-\gamma/4} = \frac{0{,}3311}{5{,}9315\times10^{-7}-1{,}6134\times10^{-7}} \approx \textbf{766\,885 registros}
+\]
+
+Es decir: por debajo de \(\approx\)767\,000 tickets históricos, \textbf{pandas sobre una única
+instancia sigue siendo más rápido que Spark con 4 executors} para T4 --- coherente con que a
+600\,000 filas (el dataset usado) el speedup medido siga por debajo de 1. Con \(N=2\),
+\(n^{*}\approx\) 1\,224\,000 registros: más executors no solo aceleran el cómputo, también
+\emph{bajan} el punto de equilibrio, porque reducen el peso relativo de \(\beta\) frente al
+trabajo distribuido.
+
+\textbf{Modelo de servicio en la nube.} Dado que el volumen actual del PFC está muy por debajo
+de \(n^{*}\) y crecerá de forma incremental (no de golpe), no se justifica un clúster Spark
+administrado y permanentemente encendido (tipo Databricks/EMR con nodos fijos). El modelo
+recomendado es de \textbf{cómputo por lotes bajo demanda} (\emph{serverless} o
+\emph{autoscaling-to-zero}): el trabajo \texttt{priority-batch-job} se ejecuta con una
+periodicidad fija, aprovisiona los executors solo durante la ventana de ejecución y se apaga el
+resto del tiempo, evitando pagar por capacidad ociosa mientras el histórico no supera
+\(n^{*}\)~\cite{shojaeerad2024serverless}. \textbf{Recursos estimados:} 2--4 executors (acorde al
+\(N\) ya evaluado), memoria suficiente para el \emph{driver} y el \emph{broadcast} de la tabla
+de regiones (pequeña, cabe en memoria). \textbf{Riesgos identificados:} (i) el costo fijo de
+arranque de sesión (\(\beta\)) penaliza corridas muy frecuentes --- una periodicidad horaria o
+diaria lo amortiza mejor que una por minuto; (ii) si el histórico de tickets crece más rápido de
+lo previsto y se acerca a \(n^{*}\) antes de lo estimado, hay que revalidar el umbral con datos
+reales de producción, no solo con esta extrapolación.
+
+% ======================================================================
+\section{Postura crítica y alternativas}
+\label{sec:postura}
+% ======================================================================
+
+\textbf{¿Es Spark la opción correcta para este PFC, hoy?} No de forma inmediata, y sí de forma
+condicionada. Al volumen actual (muy por debajo de \(n^{*}\approx\)767\,000 registros), adoptar
+Spark permanentemente sería sobre-ingeniería: se pagaría el costo fijo \(\beta\) de cada corrida
+sin recuperarlo en tiempo de cómputo ahorrado. Mi postura es adoptar el diseño de
+\texttt{priority-batch-job} (Sección~\ref{sec:integracion}) pero \textbf{desacoplado del motor
+de ejecución}, de modo que el mismo pipeline pueda correr sobre un motor más liviano mientras el
+histórico no cruce el umbral, y migrar a Spark cuando sí lo haga. Evalué y descarté dos
+alternativas concretas:
+
+\begin{enumerate}
+\item \textbf{SQL nativo en CockroachDB (agregaciones y columna generada), sin motor externo.}
+El PFC ya opera un clúster distribuido de 3 nodos particionado por \texttt{fecha\_apertura}: la
+lógica de \texttt{clasificar\_prioridad} es un \texttt{CASE WHEN} determinista sobre dos
+columnas, expresable como columna computada o vista materializada en el propio CockroachDB, sin
+introducir Spark en absoluto. \textbf{Se descarta como reemplazo definitivo, no como opción}:
+CockroachDB reparte el cómputo entre sus nodos para consultas SQL, pero no ofrece el mismo
+modelo de programación para transformaciones más complejas que las que el PFC podría necesitar
+más adelante (uniones con catálogos externos grandes, ventanas analíticas pesadas); por eso lo
+adopto como \emph{solución de corto plazo} para el volumen actual (ver umbral), no como
+arquitectura final. Es, además, la opción de menor costo operativo porque no añade infraestructura
+nueva al sistema.
+\item \textbf{Dask (paralelismo distribuido nativo de Python) en lugar de PySpark.} Al no cruzar
+la frontera JVM--Python para cada UDF, Dask podría reducir justamente el mecanismo de sobrecarga
+dominante identificado en la Sección~\ref{sec:karpflatt} para una transformación como T4. \textbf{Se
+descarta} para este PFC porque el ecosistema del equipo ya está construido sobre PySpark (código,
+protocolo de medición, evidencia de PE-U4) y porque, a diferencia de Spark, Dask no tiene una
+oferta administrada tan madura en los proveedores cloud típicos de un curso universitario
+(Databricks, EMR), lo que complicaría la sección de dimensionamiento en un entorno académico
+real. Queda como alternativa técnicamente razonable a reconsiderar si el cuello de botella
+dominante se confirma como serialización Python--JVM y no como \emph{shuffle}.
+\end{enumerate}
+
+Reconozco el límite de mi propia propuesta: el umbral \(n^{*}\) mezcla datos de dos entornos de
+ejecución distintos (Sección~\ref{sec:umbral}) y debe revalidarse con mediciones en el entorno
+de despliegue real antes de tomarse como cifra definitiva de decisión de negocio.
+
+% ======================================================================
+\section{Conclusiones}
+% ======================================================================
+
+\begin{enumerate}
+\item T4 es la transformación con mejor comportamiento relativo del conjunto (\(S=0{,}4195\)
+frente a \(0{,}07\)--\(0{,}17\) de T1/T2/T3/T5, Tabla~\ref{tab:tiempos-base}) porque es la única
+sin etapa de \emph{shuffle}; aun así, a 600\,000 filas, PySpark sigue siendo más lento que
+pandas, y la Ley de Amdahl no puede explicar esa comparación entre motores distintos
+(Sección~\ref{sec:pregunta-s}) --- solo explica el escalado \emph{dentro} de Spark, que sí medí
+para T4 (Tabla~\ref{tab:escalado-t4}).
+\item La fracción serial observada con Karp-Flatt \emph{crece} de 0,2092 (\(N=2\)) a 0,5242
+(\(N=4\)), lo que indica que la pérdida de eficiencia de T4 en mi entorno es sobrecarga
+creciente del motor --- serialización de la UDF, contención de núcleos en una sola máquina y
+partición ligada a \(N\) (Sección~\ref{sec:karpflatt}) --- y no un límite algorítmico fijo de la
+transformación.
+\item El umbral de rentabilidad calculado (\(n^{*}\approx\)767\,000 registros con \(N=4\),
+Sección~\ref{sec:umbral}) es coherente con el resultado \(S<1\) observado a 600\,000 filas y
+sostiene una recomendación concreta y verificable para el PFC: no migrar a Spark todavía, sino
+diseñar \texttt{priority-batch-job} desacoplado del motor y reevaluar contra CockroachDB nativo
+cuando el histórico de tickets se acerque a ese umbral (Sección~\ref{sec:postura}).
+\end{enumerate}
+
+% ======================================================================
+\section{Declaración de uso de inteligencia artificial generativa}
+% ======================================================================
+
+Se utilizó \textbf{Claude (Anthropic)} como asistente durante la elaboración de este informe,
+bajo supervisión y revisión propia, con los siguientes alcances:
+
+\begin{itemize}
+\item \textbf{Verificación de trazabilidad:} confirmación del commit exacto del repositorio de
+PE-U4 (\texttt{git ls-remote}, inspección del árbol de archivos vía la API de GitHub) citado en
+la Sección~\ref{sec:analisis}.
+\item \textbf{Medición individual complementaria:} el equipo no midió el escalado \(N=1,2,4\) de
+T4 (solo lo hizo para T3). Yo mismo ejecuté esa medición ---no el asistente por su cuenta---
+reutilizando sin modificar el código fuente del equipo (\texttt{medicion.py},
+\texttt{transformaciones\_spark.py}, \texttt{referencia.py}) en mi propia máquina; el asistente
+ayudó a redactar el script que orquesta esa ejecución y el cálculo posterior de Karp-Flatt, el
+ajuste de Amdahl y el umbral de rentabilidad (Secciones~\ref{sec:karpflatt}
+y~\ref{sec:umbral}), aplicando las fórmulas de \texttt{src/amdahl.py} del equipo sin alterarlas.
+\item \textbf{Redacción y estructura:} apoyo en la redacción de las Secciones 1 a 8 y en la
+composición del documento \LaTeX{} (plantilla, tabla \texttt{booktabs}, figura, diagrama TikZ de
+la Sección~\ref{sec:integracion}), sobre el análisis y las decisiones de contenido que son de mi
+autoría.
+\item \textbf{Búsqueda de referencias propias:} búsqueda y verificación de DOI de las dos
+referencias declaradas como propias en la Sección de Referencias
+(\cite{duenner2017understanding}, \cite{shojaeerad2024serverless}), distintas de la bibliografía
+obligatoria de PE-U4.
+\end{itemize}
+
+El análisis de los resultados, la interpretación de las tendencias, la propuesta de integración
+al PFC y las conclusiones son responsabilidad exclusiva del autor de este informe.
+
+% ======================================================================
+\section*{Anexo: formalización matemática}
+% ======================================================================
+
+Las siguientes expresiones son las exigidas por la guía de la actividad y se citan en el texto
+de las secciones anteriores.
+
+\begin{equation}
+S(N) = \frac{1}{(1-p)+\dfrac{p}{N}}, \qquad S_{\max} = \lim_{N\to\infty} S(N) = \frac{1}{1-p}
+\label{eq:amdahl}
+\end{equation}
+
+\begin{equation}
+e = \dfrac{\dfrac{1}{S}-\dfrac{1}{N}}{1-\dfrac{1}{N}}, \qquad N>1
+\label{eq:karpflatt}
+\end{equation}
+
+\begin{equation}
+E(N) = \frac{S(N)}{N}
+\label{eq:eficiencia}
+\end{equation}
+
+\begin{equation}
+T_{\text{sec}}(n)=\alpha n, \quad T_{\text{dist}}(n)=\beta+\frac{\gamma n}{N}, \qquad
+n^{*} = \frac{\beta}{\alpha-\dfrac{\gamma}{N}}, \quad \text{válido si } \alpha>\frac{\gamma}{N}
+\label{eq:umbral}
+\end{equation}
+
+% ======================================================================
+\clearpage
+\printbibliography[title={Referencias}]
+
+\end{document}
