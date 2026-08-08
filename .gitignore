@@ -1,0 +1,23 @@
+# LaTeX build artifacts (el PDF final SÍ se committea, ver docs/TA_IND_04_Informe.pdf)
+docs/*.aux
+docs/*.bbl
+docs/*.bcf
+docs/*.blg
+docs/*.log
+docs/*.out
+docs/*.run.xml
+docs/*.toc
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.synctex.gz
+
+# Python
+__pycache__/
+*.pyc
+
+# Dataset crudo (no versionado, se regenera — ver README del repositorio de origen)
+data/raw/*.csv
+
+# OS
+.DS_Store
+Thumbs.db
