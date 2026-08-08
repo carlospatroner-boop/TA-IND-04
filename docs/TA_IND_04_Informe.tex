@@ -26,7 +26,9 @@
 
 % ---------- Referencias cruzadas y bibliografía ----------
 \usepackage{hyperref}
-\hypersetup{colorlinks=true, linkcolor=blue!50!black, citecolor=blue!50!black, urlcolor=blue!50!black}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, citecolor=blue!50!black, urlcolor=blue!50!black,
+            breaklinks=true}
+\usepackage{array}
 \usepackage[backend=biber,style=ieee,sorting=none]{biblatex}
 \addbibresource{references.bib}
 
@@ -61,18 +63,16 @@
 \end{tabular}
 
 \vspace{1.2cm}
-\begin{tabular}{ll}
-\textbf{Estudiante:} & Carpio Mendoza Carlos Jose \\
-\textbf{Correo:} & carlospatroner@gmail.com \\
-\textbf{Equipo PE-U4 / GA-SUM-05:} & ACC --- Soporte Técnico ISP \\
- & (Alvarez Parraga Jeremy Alexis, Aucatoma Celorio Jhinson Stalyn, \\
- & Carpio Mendoza Carlos Jose) \\
-\textbf{PFC de referencia:} & ACC --- Soporte Técnico ISP \\
- & (sistema de gestión de tickets de soporte técnico, arquitectura \\
- & de microservicios) \\
-\textbf{Transformación declarada como foco:} & T4 --- Columna derivada compleja \\
- & (clasificación de prioridad de atención) \\
-\textbf{URL del repositorio individual:} & \url{https://github.com/carlospatroner-boop/TA-IND-04} \\
+\begin{tabular}{>{\bfseries\raggedright}p{4.6cm} p{9.6cm}}
+Estudiante: & Carpio Mendoza Carlos Jose \\[3pt]
+Correo: & carlospatroner@gmail.com \\[3pt]
+Equipo PE-U4 / GA-SUM-05: & ACC --- Soporte Técnico ISP (Alvarez Parraga Jeremy Alexis,
+ Aucatoma Celorio Jhinson Stalyn, Carpio Mendoza Carlos Jose) \\[3pt]
+PFC de referencia: & ACC --- Soporte Técnico ISP (sistema de gestión de tickets de soporte
+ técnico, arquitectura de microservicios) \\[3pt]
+Transformación declarada como foco: & T4 --- Columna derivada compleja (clasificación de
+ prioridad de atención) \\[3pt]
+URL del repositorio individual: & \url{https://github.com/carlospatroner-boop/TA-IND-04} \\
 \end{tabular}
 
 \vspace{1.5cm}
@@ -104,7 +104,8 @@ histórico interno de tickets del ISP por no existir un dataset abierto equivale
 Ecuador. Los datos base de este informe proceden íntegramente del repositorio del equipo:
 
 \begin{quote}
-\textbf{Repositorio de origen:} \url{https://github.com/carlospatroner-boop/pe-u4-spark-Soporte-Tecnico-ISP}\\
+\textbf{Repositorio de origen:}\\
+\url{https://github.com/carlospatroner-boop/pe-u4-spark-Soporte-Tecnico-ISP}\\[4pt]
 \textbf{Commit exacto:} \texttt{1d643b0c1f71a1cfd951c3e8e7169744010d1420}
 \end{quote}
 
