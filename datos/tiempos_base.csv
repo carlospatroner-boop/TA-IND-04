@@ -1,0 +1,9 @@
+sección,id_transformacion,descripcion,T_pandas_s,T_pyspark_s,S,E_con_N4,fuente
+tabla_base,T1_filtrado,Filtrado y selección,0.184637,1.078875,0.1711,0.0428,commit 1d643b0c1f71a1cfd951c3e8e7169744010d1420
+tabla_base,T2_agrupacion,Agrupación y agregación,0.157455,1.885391,0.0835,0.0209,commit 1d643b0c1f71a1cfd951c3e8e7169744010d1420
+tabla_base,T3_join,Join de dos DataFrames,0.136325,1.828990,0.0745,0.0186,commit 1d643b0c1f71a1cfd951c3e8e7169744010d1420
+tabla_base,T4_columna_derivada,Columna derivada compleja (foco declarado),0.355890,0.848307,0.4195,0.1049,commit 1d643b0c1f71a1cfd951c3e8e7169744010d1420
+tabla_base,T5_top_n,Ordenamiento y top-N,0.116895,1.428594,0.0818,0.0205,commit 1d643b0c1f71a1cfd951c3e8e7169744010d1420
+escalado_foco_T4,T4_N1,Foco T4 con N=1 (medición propia),,0.743461,1.0000,1.0000,medición propia local — ver plataforma_medicion_individual.json
+escalado_foco_T4,T4_N2,Foco T4 con N=2 (medición propia),,0.449486,1.6540,0.8270,medición propia local — ver plataforma_medicion_individual.json
+escalado_foco_T4,T4_N4,Foco T4 con N=4 (medición propia),,0.478134,1.5549,0.3887,medición propia local — ver plataforma_medicion_individual.json

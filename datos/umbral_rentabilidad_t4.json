@@ -1,0 +1,17 @@
+{
+  "alpha_s_por_fila": 5.9315e-07,
+  "beta_s": 0.3311462500132622,
+  "gamma_s": 6.45373190415002e-07,
+  "n_filas_dataset": 600000,
+  "t_pandas_t4_s": 0.35589,
+  "N=2": {
+    "gamma_sobre_N": 3.22686595207501e-07,
+    "alpha_mayor_gamma_sobre_N": true,
+    "n_estrella": 1224366.1957421538
+  },
+  "N=4": {
+    "gamma_sobre_N": 1.613432976037505e-07,
+    "alpha_mayor_gamma_sobre_N": true,
+    "n_estrella": 766885.3868539175
+  }
+}

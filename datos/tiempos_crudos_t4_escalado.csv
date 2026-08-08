@@ -1,0 +1,16 @@
+motor,transformacion,repeticion,tiempo_s
+pyspark,T4_columna_derivada_N1,1,0.754039
+pyspark,T4_columna_derivada_N1,2,0.746258
+pyspark,T4_columna_derivada_N1,3,0.674411
+pyspark,T4_columna_derivada_N1,4,0.712382
+pyspark,T4_columna_derivada_N1,5,0.743461
+pyspark,T4_columna_derivada_N2,1,0.534694
+pyspark,T4_columna_derivada_N2,2,0.48511
+pyspark,T4_columna_derivada_N2,3,0.438744
+pyspark,T4_columna_derivada_N2,4,0.449486
+pyspark,T4_columna_derivada_N2,5,0.388738
+pyspark,T4_columna_derivada_N4,1,0.660972
+pyspark,T4_columna_derivada_N4,2,0.60043
+pyspark,T4_columna_derivada_N4,3,0.439664
+pyspark,T4_columna_derivada_N4,4,0.478134
+pyspark,T4_columna_derivada_N4,5,0.437395
